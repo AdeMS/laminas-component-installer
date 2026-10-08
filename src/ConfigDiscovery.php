@@ -30,6 +30,7 @@ final class ConfigDiscovery
             'aggregator' => ConfigDiscovery\ConfigAggregator::class,
             'manager'    => ConfigDiscovery\MezzioConfig::class,
         ],
+        'container/config/global.php' => ConfigDiscovery\DapurConfig::class,
     ];
 
     /**
@@ -48,6 +49,7 @@ final class ConfigDiscovery
             'aggregator' => Injector\ConfigAggregatorInjector::class,
             'manager'    => Injector\MezzioConfigInjector::class,
         ],
+        'container/config/global.php' => Injector\DapurConfigInjector::class,
     ];
 
     /**
