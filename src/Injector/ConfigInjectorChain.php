@@ -39,12 +39,14 @@ final class ConfigInjectorChain implements InjectorInterface
      *
      * @param array<string,class-string<InjectorInterface>> $injectors
      * @param Collection<array-key,InjectorInterface::TYPE_*> $availableTypes
+     * @param non-empty-string|null $configFile
      */
     public function __construct(
         array $injectors,
         DiscoveryChainInterface $discoveryChain,
         Collection $availableTypes,
-        string $projectRoot = ''
+        string $projectRoot = '',
+        private ?string $configFile = null
     ) {
         $this->chain = (new Collection($injectors))
             // Keep only those injectors that discovery exists in discoveryChain
@@ -52,9 +54,11 @@ final class ConfigInjectorChain implements InjectorInterface
                 static fn(string $injector, string $file) => $discoveryChain->discoveryExists($file)
             )
             // Create an injector for the config file
-            ->map(
-                fn(string $injector): InjectorInterface => new $injector($projectRoot)
-            )
+            ->map(function (string $injector) use ($projectRoot): InjectorInterface {
+                return $this->configFile === null
+                    ? new $injector($projectRoot)
+                    : new $injector($projectRoot, $this->configFile);
+            })
             // Keep only those injectors that match types available for the package
             ->filter(fn(InjectorInterface $injector) => $availableTypes->anySatisfies(
                 fn(int $type) => $injector->registersType($type)

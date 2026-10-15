@@ -23,12 +23,20 @@ final class DiscoveryChain implements DiscoveryChainInterface
      * this value.
      *
      * @param array<string,class-string<DiscoveryInterface>> $discovery
+     * @param non-empty-string|null $configFile
      */
-    public function __construct(array $discovery, string $projectDirectory = '')
-    {
+    public function __construct(
+        array $discovery,
+        string $projectDirectory = '',
+        private ?string $configFile = null
+    ) {
         $this->chain = (new Collection($discovery))
             // Create a discovery class for the discovery type
-            ->map(static fn(string $discoveryClass) => new $discoveryClass($projectDirectory))
+            ->map(function (string $discoveryClass) use ($projectDirectory) {
+                return $this->configFile === null
+                    ? new $discoveryClass($projectDirectory)
+                    : new $discoveryClass($projectDirectory, $this->configFile);
+            })
             // Use only those where we can locate a corresponding config file
             ->filter(static fn(DiscoveryInterface $discovery) => $discovery->locate());
     }

@@ -13,13 +13,6 @@ use function sprintf;
 final class DapurConfig extends AbstractDiscovery
 {
     /**
-     * Configuration file to look for.
-     *
-     * @var non-empty-string
-     */
-    protected string $configFile = 'container/config/global.php';
-
-    /**
      * Expected pattern to match if the configuration file exists.
      *
      * Pattern is set in constructor to ensure PCRE quoting is correct.
@@ -28,8 +21,13 @@ final class DapurConfig extends AbstractDiscovery
      */
     protected string $expected;
 
-    public function __construct(string $projectDirectory = '')
-    {
+    /**
+     * @param non-empty-string $configFile
+     */
+    public function __construct(
+        string $projectDirectory = '',
+        protected string $configFile = 'container/config/global.php'
+    ) {
         $this->expected = sprintf(
             '/new (?:%s?%s)?ConfigManager\(\s*(?:array\(|\[)/s',
             preg_quote('\\'),

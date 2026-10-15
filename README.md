@@ -81,6 +81,12 @@ one or more of the following keys under the `extra.laminas` configuration in the
   invokable that returns an array of configuration, and will be injected at the
   top of:
     - `config/config.php`
+    - any supported `container/config/*.php` file. When no remembered or
+      automatic installation choice applies, the installer prompts you to
+      choose which discovered configuration file to update. A file must contain
+      a `Laminas\ConfigAggregator\ConfigAggregator` or
+      `Mezzio\ConfigManager\ConfigManager` instance for the installer to offer
+      it.
 
 ## Marking Packages to Auto-Install or to Be Ignored
 

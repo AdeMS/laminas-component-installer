@@ -16,6 +16,7 @@ use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+use function file_get_contents;
 use function sprintf;
 
 final class ConfigDiscoveryTest extends TestCase
@@ -98,6 +99,20 @@ final class ConfigDiscoveryTest extends TestCase
         vfsStream::newFile('config/modules.config.php')
             ->at($this->projectRoot)
             ->setContent('<' . "?php\nreturn [\n]);");
+    }
+
+    private function createDapurConfig(string $fileName): void
+    {
+        vfsStream::newFile('container/config/' . $fileName)
+            ->at($this->projectRoot)
+            ->setContent('<' . "?php\n\$aggregator = new ConfigAggregator([\n]);");
+    }
+
+    private function createDapurManagerConfig(string $fileName): void
+    {
+        vfsStream::newFile('container/config/' . $fileName)
+            ->at($this->projectRoot)
+            ->setContent('<' . "?php\n\$configManager = new ConfigManager([\n]);");
     }
 
     /**
@@ -324,5 +339,55 @@ final class ConfigDiscoveryTest extends TestCase
 
         $this->assertInstanceOf(Collection::class, $options);
         $this->assertTrue($options->isEmpty());
+    }
+
+    public function testDapurConfigProvidersCanBeInstalledIntoSelectedConfigFile(): void
+    {
+        $this->createDapurConfig('global.php');
+        $this->createDapurConfig('site.php');
+        vfsStream::newFile('container/config/notes.txt')
+            ->at($this->projectRoot)
+            ->setContent('not a PHP config file');
+
+        $options = $this->discovery->getAvailableConfigOptions(
+            new Collection([InjectorInterface::TYPE_CONFIG_PROVIDER]),
+            vfsStream::url('project')
+        );
+
+        self::assertCount(3, $options);
+        self::assertSame('Do not inject', $options->get(0)->getPromptText());
+        self::assertSame('container/config/global.php', $options->get(1)->getPromptText());
+        self::assertSame('container/config/site.php', $options->get(2)->getPromptText());
+
+        $selectedInjector = $options->get(2)->getInjector();
+        self::assertTrue($selectedInjector->inject(
+            'Vendor\Package\ConfigProvider',
+            InjectorInterface::TYPE_CONFIG_PROVIDER
+        ));
+
+        $globalConfig = file_get_contents(vfsStream::url('project/container/config/global.php'));
+        $siteConfig   = file_get_contents(vfsStream::url('project/container/config/site.php'));
+        self::assertStringNotContainsString('Vendor\Package\ConfigProvider', $globalConfig);
+        self::assertStringContainsString('Vendor\Package\ConfigProvider', $siteConfig);
+    }
+
+    public function testDapurConfigManagerFilesAreAvailableAsInstallTargets(): void
+    {
+        $this->createDapurManagerConfig('local.php');
+
+        $options = $this->discovery->getAvailableConfigOptions(
+            new Collection([InjectorInterface::TYPE_CONFIG_PROVIDER]),
+            vfsStream::url('project')
+        );
+
+        self::assertCount(2, $options);
+        self::assertSame('container/config/local.php', $options->get(1)->getPromptText());
+        self::assertTrue($options->get(1)->getInjector()->inject(
+            'Vendor\Package\ConfigProvider',
+            InjectorInterface::TYPE_CONFIG_PROVIDER
+        ));
+
+        $config = file_get_contents(vfsStream::url('project/container/config/local.php'));
+        self::assertStringContainsString('Vendor\Package\ConfigProvider', $config);
     }
 }

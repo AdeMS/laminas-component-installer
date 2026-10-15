@@ -4,10 +4,17 @@ declare(strict_types=1);
 
 namespace Laminas\ComponentInstaller;
 
+use DirectoryIterator;
 use Laminas\ComponentInstaller\ConfigDiscovery\DiscoveryChainInterface;
 use Laminas\ComponentInstaller\Injector\InjectorInterface;
 
+use function array_search;
+use function array_splice;
+use function array_unshift;
 use function is_array;
+use function is_dir;
+use function sort;
+use function str_ends_with;
 
 /**
  * @internal
@@ -30,10 +37,6 @@ final class ConfigDiscovery
             'aggregator' => ConfigDiscovery\ConfigAggregator::class,
             'manager'    => ConfigDiscovery\MezzioConfig::class,
         ],
-        'container/config/global.php' => [
-            "aggregator" => ConfigDiscovery\DapurConfigAggregator::class,
-            "manager"    => ConfigDiscovery\DapurConfig::class,
-        ],
     ];
 
     /**
@@ -51,10 +54,6 @@ final class ConfigDiscovery
         'config/config.php'                  => [
             'aggregator' => Injector\ConfigAggregatorInjector::class,
             'manager'    => Injector\MezzioConfigInjector::class,
-        ],
-        'container/config/global.php' => [
-            "aggregator" => Injector\DapurConfigAggregatorInjector::class,
-            "manager"    => Injector\DapurConfigInjector::class,
         ],
     ];
 
@@ -104,6 +103,8 @@ final class ConfigDiscovery
             ->map(static fn ($injector, $file) => new ConfigOption($file, $injector))
             ->toOrderedCollection();
 
+        $options->merge($this->getDapurConfigOptions($availableTypes, $projectRoot));
+
         if ($options->isEmpty()) {
             return new Collection([]);
         }
@@ -112,5 +113,81 @@ final class ConfigDiscovery
             new ConfigOption('Do not inject', new Injector\NoopInjector()),
             ...$options->toArray(),
         ]);
+    }
+
+    /**
+     * Discover supported configuration files in Dapur's container/config directory.
+     *
+     * @template TKey of array-key
+     * @param Collection<TKey,InjectorInterface::TYPE_*> $availableTypes
+     * @return Collection<string,ConfigOption>
+     */
+    private function getDapurConfigOptions(Collection $availableTypes, string $projectRoot): Collection
+    {
+        $configDirectory = ($projectRoot !== '' ? $projectRoot . '/' : '')
+            . 'container/config';
+
+        if (! is_dir($configDirectory)) {
+            return new Collection([]);
+        }
+
+        $configFiles = [];
+        foreach (new DirectoryIterator($configDirectory) as $file) {
+            if (! $file->isFile() || ! str_ends_with($file->getFilename(), '.php')) {
+                continue;
+            }
+
+            $configFiles[] = 'container/config/' . $file->getFilename();
+        }
+
+        sort($configFiles);
+
+        $defaultConfigIndex = array_search(
+            Injector\DapurConfigAggregatorInjector::DEFAULT_CONFIG_FILE,
+            $configFiles,
+            true
+        );
+        if ($defaultConfigIndex !== false) {
+            $defaultConfig = $configFiles[$defaultConfigIndex];
+            array_splice($configFiles, $defaultConfigIndex, 1);
+            array_unshift($configFiles, $defaultConfig);
+        }
+
+        $options = [];
+        foreach ($configFiles as $configFile) {
+            $discovery = new ConfigDiscovery\DiscoveryChain(
+                [
+                    'aggregator' => ConfigDiscovery\DapurConfigAggregator::class,
+                    'manager'    => ConfigDiscovery\DapurConfig::class,
+                ],
+                $projectRoot,
+                $configFile
+            );
+
+            if (! $discovery->locate()) {
+                continue;
+            }
+
+            $injector = new Injector\ConfigInjectorChain(
+                [
+                    'aggregator' => Injector\DapurConfigAggregatorInjector::class,
+                    'manager'    => Injector\DapurConfigInjector::class,
+                ],
+                $discovery,
+                $availableTypes,
+                $projectRoot,
+                $configFile
+            );
+
+            if (! $availableTypes->anySatisfies(
+                static fn(int $type) => $injector->registersType($type)
+            )) {
+                continue;
+            }
+
+            $options[$configFile] = new ConfigOption($configFile, $injector);
+        }
+
+        return new Collection($options);
     }
 }

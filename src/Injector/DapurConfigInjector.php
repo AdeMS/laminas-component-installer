@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Laminas\ComponentInstaller\Injector;
 
 use Laminas\ComponentInstaller\ConfigDiscovery\DiscoveryInterface;
-use Laminas\ComponentInstaller\ConfigDiscovery\MezzioConfig as MezzioConfigDiscovery;
+use Laminas\ComponentInstaller\ConfigDiscovery\DapurConfig as DapurConfigDiscovery;
 
 use function preg_quote;
 use function sprintf;
@@ -33,7 +33,7 @@ final class DapurConfigInjector extends AbstractInjector
      *
      * @var class-string<DiscoveryInterface>
      */
-    protected string $discoveryClass = MezzioConfigDiscovery::class;
+    protected string $discoveryClass = DapurConfigDiscovery::class;
 
     /**
      * Patterns and replacements to use when registering a code item.
@@ -68,8 +68,12 @@ final class DapurConfigInjector extends AbstractInjector
      * Sets $isRegisteredPattern and pattern for $injectionPatterns to ensure
      * proper PCRE quoting.
      */
-    public function __construct(string $projectRoot = '')
-    {
+    public function __construct(
+        string $projectRoot = '',
+        string $configFile = self::DEFAULT_CONFIG_FILE
+    ) {
+        $this->configFile = $configFile;
+
         $this->isRegisteredPattern = '/new (?:'
             . preg_quote('\\')
             . '?'
@@ -90,7 +94,7 @@ final class DapurConfigInjector extends AbstractInjector
 
     protected function getDefaultConfigFile(): string
     {
-        return self::DEFAULT_CONFIG_FILE;
+        return $this->configFile;
     }
 
     protected function getDiscoveryClass(): string
